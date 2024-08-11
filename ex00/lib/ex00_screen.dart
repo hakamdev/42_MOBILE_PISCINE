@@ -16,7 +16,7 @@ class Ex00Screen extends StatelessWidget {
                   color: Colors.green.shade800,
                   borderRadius: BorderRadius.circular(8)),
               child: const Text(
-                "Hello World!",
+                "A simple text!",
                 style: TextStyle(
                   fontSize: 30,
                   color: Colors.white,
