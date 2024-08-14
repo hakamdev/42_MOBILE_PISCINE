@@ -29,7 +29,7 @@ class CalculatorDisplay extends StatelessWidget {
             const SizedBox(height: 8),
             Text(
               result.isNotEmpty ? result : "0",
-              style: Theme.of(context).textTheme.displaySmall?.copyWith(
+              style: Theme.of(context).textTheme.headlineLarge?.copyWith(
                     fontWeight: FontWeight.w600,
                     color: Theme.of(context).colorScheme.onInverseSurface,
                   ),

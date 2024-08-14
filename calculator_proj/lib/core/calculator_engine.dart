@@ -2,16 +2,20 @@ import 'package:calculator_proj/core/operations.dart';
 import 'package:flutter/material.dart';
 
 class CalculatorEngine extends ChangeNotifier {
-  static const String SYMBOLS = "+-x/";
-  static const String DIGITS = "0123456789.";
 
+  /// Private fields
+  static const String _SYMBOLS = "+-x/";
+  static const String _DIGITS = "0123456789.";
   String _valueLiteral = "";
   String _result = "";
+  List<num> _numbers = [];
+  List<String> _operators = [];
 
+  /// Public getters
   String get result => _result;
-
   String get valueLiteral => _valueLiteral;
 
+  /// Public methods
   void clear() {
     _valueLiteral = "";
     _result = "";
@@ -37,9 +41,9 @@ class CalculatorEngine extends ChangeNotifier {
     final lastChar = valueLiteral.trimRight().characters.lastOrNull;
 
     if (lastChar != null) {
-      if (DIGITS.contains(lastChar)) {
+      if (_DIGITS.contains(lastChar)) {
         _valueLiteral += " $op ";
-      } else if (SYMBOLS.contains(lastChar)) {
+      } else if (_SYMBOLS.contains(lastChar)) {
         if (op == "-" && lastChar != "-") {
           _valueLiteral += " $op";
         }
@@ -51,12 +55,42 @@ class CalculatorEngine extends ChangeNotifier {
     notifyListeners();
   }
 
-  void updateResult(String res) {
+  void calculate() {
+    /// Protections against empty string
+    if (_valueLiteral.trim().isEmpty) return;
+
+    /// Protection against last char being an operator
+    if (!_checkSyntaxErrors()) return;
+
+    /// Parsing valueLiteral into list of number and list of operators
+    _parseValueLiteral();
+
+    /// Protection against a single number in valueLiteral
+    if (_numbers.length < 2) return;
+
+    /// Doing All Multiplications and Divisions first
+    if (!_calculateMultiplicationsAndDivisions()) return;
+
+    /// If there are no more operations show result
+    if (_operators.isEmpty && _numbers.length == 1) {
+      _convertNumberToScientificNotationIfNeeded(_numbers.firstOrNull);
+      return;
+    }
+
+    /// Doing Additions and Subtractions last
+    _calculateAdditionAndSubtraction();
+
+    /// Show result
+    _convertNumberToScientificNotationIfNeeded(_numbers.firstOrNull);
+  }
+
+  /// Private methods
+  void _updateResult(String res) {
     _result = res;
     notifyListeners();
   }
 
-  void updateResultAndRemoveDecimalPointsIfZero(String res) {
+  void _updateResultAndRemoveDecimalPointsIfZero(String res) {
     final parts = res.trim().split(".");
     _result = parts.firstOrNull ?? "";
 
@@ -70,95 +104,87 @@ class CalculatorEngine extends ChangeNotifier {
     notifyListeners();
   }
 
-  void convertNumberToScientificNotationIfNeeded(num? number) {
-    if (number == null) return updateResult("");
+  void _convertNumberToScientificNotationIfNeeded(num? number) {
+    if (number == null) return _updateResult("");
     if (number > 1000000000000000) {
-      return updateResult(number.toStringAsExponential());
+      return _updateResult(number.toStringAsExponential());
     }
-    return updateResultAndRemoveDecimalPointsIfZero("$number");
+    return _updateResultAndRemoveDecimalPointsIfZero("$number");
   }
 
-  void updateResultWithError(String error) {
+  void _updateResultWithError(String error) {
     _result = error;
     notifyListeners();
   }
 
-  void calculate() {
-    if (_valueLiteral.trim().isEmpty) return;
+  bool _checkSyntaxErrors() {
     final lastChar = _valueLiteral.trimRight().characters.lastOrNull;
-    if (lastChar != null && SYMBOLS.contains(lastChar)) {
-      updateResultWithError("Syntax Error");
-      return;
+    if (lastChar != null && _SYMBOLS.contains(lastChar)) {
+      _updateResultWithError("Syntax Error");
+      return false;
     }
+    return true;
+  }
 
+  void _parseValueLiteral() {
     List<String> units =
         _valueLiteral.split(" ").where((unit) => unit.isNotEmpty).toList();
-    List<num> numbers = units
-        .where((unit) => DIGITS.contains(unit.characters.last))
+    _numbers = units
+        .where((unit) => _DIGITS.contains(unit.characters.last))
         .map<num>((unit) => num.parse(unit))
         .toList();
-    List<String> symbols =
-        units.where((unit) => !DIGITS.contains(unit.characters.last)).toList();
+    _operators =
+        units.where((unit) => !_DIGITS.contains(unit.characters.last)).toList();
+  }
 
-    if (numbers.length < 2) return;
-
-    List<num> numbersTemp = [];
-    List<String> symbolsTemp = [];
-
-    print(_valueLiteral);
-    print(numbers);
-    print(symbols);
-
-    while (symbols.contains("x") || symbols.contains("/")) {
+  bool _calculateMultiplicationsAndDivisions() {
+    while (_operators.contains("x") || _operators.contains("/")) {
+      List<num> numbersTemp = [];
+      List<String> operatorsTemp = [];
       bool operationFound = false;
       int secondOperandIndex = -1;
-      for (int i = 0; i < numbers.length; i++) {
+      for (int i = 0; i < _numbers.length; i++) {
         if (!operationFound &&
-            i < symbols.length &&
-            (symbols[i] == "x" || symbols[i] == "/")) {
-          final firstOperand = numbers[i];
-          final secondOperand = numbers[i + 1];
-          if (symbols[i] == "/" && secondOperand == 0) {
-            updateResultWithError("Error: Division by zero");
-            return;
+            i < _operators.length &&
+            (_operators[i] == "x" || _operators[i] == "/")) {
+          final firstOperand = _numbers[i];
+          final secondOperand = _numbers[i + 1];
+          if (_operators[i] == "/" && secondOperand == 0) {
+            _updateResultWithError("Error: Division by zero");
+            return false;
           }
-          final res = operations[symbols[i]]?.call(firstOperand, secondOperand);
+          final res =
+              operations[_operators[i]]?.call(firstOperand, secondOperand);
           numbersTemp.add(res!);
           secondOperandIndex = i + 1;
           operationFound = true;
         } else {
-          if (i != secondOperandIndex) numbersTemp.add(numbers[i]);
-          if (i < symbols.length) symbolsTemp.add(symbols[i]);
+          if (i != secondOperandIndex) numbersTemp.add(_numbers[i]);
+          if (i < _operators.length) operatorsTemp.add(_operators[i]);
         }
       }
-      numbers = numbersTemp;
-      symbols = symbolsTemp;
-      numbersTemp = [];
-      symbolsTemp = [];
+      _numbers = numbersTemp;
+      _operators = operatorsTemp;
     }
-
-    if (symbols.isEmpty && numbers.length == 1) {
-      convertNumberToScientificNotationIfNeeded(numbers.firstOrNull);
-      return;
-    }
-
-    // TODO: do + and -
-    while (symbols.isNotEmpty) {
-      final firstOperand = numbers[0];
-      final secondOperand = numbers[1];
-      final res = operations[symbols[0]]?.call(firstOperand, secondOperand);
-      numbersTemp.add(res!);
-      for (int i = 1; i < numbers.length; i++) {
-        if (i > 1) numbersTemp.add(numbers[i]);
-        if (i < symbols.length) symbolsTemp.add(symbols[i]);
-      }
-      numbers = numbersTemp;
-      symbols = symbolsTemp;
-      numbersTemp = [];
-      symbolsTemp = [];
-      print(numbers);
-      print(symbols);
-    }
-    convertNumberToScientificNotationIfNeeded(numbers.firstOrNull);
+    return true;
   }
+
+  bool _calculateAdditionAndSubtraction() {
+    while (_operators.isNotEmpty) {
+      List<num> numbersTemp = [];
+      List<String> operatorsTemp = [];
+      final firstOperand = _numbers[0];
+      final secondOperand = _numbers[1];
+      final res = operations[_operators[0]]?.call(firstOperand, secondOperand);
+      numbersTemp.add(res!);
+      for (int i = 1; i < _numbers.length; i++) {
+        if (i > 1) numbersTemp.add(_numbers[i]);
+        if (i < _operators.length) operatorsTemp.add(_operators[i]);
+      }
+      _numbers = numbersTemp;
+      _operators = operatorsTemp;
+    }
+    return true;
+  }
+
 }
